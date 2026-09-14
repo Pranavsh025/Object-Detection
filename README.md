@@ -1,39 +1,73 @@
-# Object_Detection
+# Blood_Cell_Detection
 
-Vehicle detection using YOLOv8, trained on a custom vehicle dataset.
+Blood cell detection using YOLOv8, fine-tuned on the BCCD dataset — achieving **0.87 mAP50** on the held-out test set.
 
 ## What's in here
 
-Loaded the dataset (uploaded as a zip and extracted), split it into train/valid/test, and loaded a pretrained YOLOv8n (nano) model as the starting point. Ran a baseline validation on it first, then fine-tuned it on the vehicle dataset for 30 epochs at 640x640 image size.
+Loaded the BCCD dataset (uploaded as a zip and extracted), inspected the folder structure and YOLO-format labels, then loaded a pretrained YOLOv8n model as the starting point. Ran a baseline evaluation on it first (it scores near-zero, since RBC/WBC/Platelets aren't COCO classes), then fine-tuned it on the blood cell dataset for 30 epochs at 640×640 with the backbone frozen (`freeze=10`) — a good setup for a small dataset like this one.
 
 ## Dataset
 
-Used a small vehicle detection dataset (sourced from Roboflow) in YOLO format, covering 5 classes: bus, car, motorcycle, pedestrian, and semi. It came with only a train split, so it got randomly divided into train/valid/test (70/20/10) before training - around 360 images total.
+[BCCD (Blood Cell Count and Detection)](https://public.roboflow.com/object-detection/bccd) — Roboflow Public Datasets, MIT license.
+
+| Split | Images |
+|---|---|
+| Train | 765 |
+| Valid | 73 |
+| Test | 36 |
+
+**Classes (3):** `RBC` (Red Blood Cell), `WBC` (White Blood Cell), `Platelets`
+
+## Model & training
+
+- **Base model:** YOLOv8n (nano), COCO-pretrained
+- **Epochs:** 30
+- **Image size:** 640×640
+- **Backbone:** frozen first 10 layers (`freeze=10`) — only the detection head is retrained
+- **Framework:** [Ultralytics](https://github.com/ultralytics/ultralytics)
+
+## Results (test set)
+
+| Metric | Pretrained (baseline) | Fine-tuned |
+|---|---|---|
+| mAP50 | 0.00 | **0.87** |
+| mAP50-95 | 0.00 | **0.60** |
+| Precision | 0.00 | **0.79** |
+| Recall | 0.01 | **0.88** |
+
+**Per-class mAP50 (fine-tuned):**
+
+| Class | mAP50 |
+|---|---|
+| WBC | 0.97 |
+| RBC | 0.87 |
+| Platelets | 0.78 |
+
+The pretrained COCO model performs at essentially zero — expected, since none of its 80 classes are blood cells. Fine-tuning does all the work here. WBCs (large, distinct nucleus) are the easiest to detect; Platelets (small, low-contrast) are the hardest, which is typical for this dataset.
 
 ## Files
 
-- `Object_Detection.ipynb` - the notebook
-- `dataset/` - the vehicle images and YOLO-format labels used for training
+- `BCCD_Blood_Cell_Detection.ipynb` — full notebook: data loading, baseline eval, fine-tuning, evaluation, comparison, and sample prediction visualization
+- `best.pt` — fine-tuned model weights
+- `README.md` — this file
 
-## Results
+## How to run
 
-Trained for 30 epochs and the model ended up performing pretty well on the validation set:
+1. Open the notebook in Google Colab (or locally with a GPU).
+2. Download the dataset in YOLOv8 format from [Roboflow](https://public.roboflow.com/object-detection/bccd/3/download/yolov8) and upload the zip when prompted.
+3. Run all cells top to bottom — it installs `ultralytics`, evaluates the baseline, fine-tunes for 30 epochs, evaluates again, and saves the best weights automatically.
 
-- **mAP50**: 0.931
-- **mAP50-95**: 0.744
-- **Precision**: 0.93
-- **Recall**: 0.858
+To run inference with the already-trained weights instead of retraining:
 
-Per-class breakdown showed some classes were much easier to detect than others - "bus" and "semi" hit near-perfect mAP50 (0.98+), while "pedestrian" lagged behind at 0.763 mAP50, likely because there were far fewer pedestrian instances in the dataset (14) compared to cars (128) or buses (28). Training the whole thing only took about 3 minutes thanks to using the small YOLOv8n model on a T4 GPU.
+```python
+from ultralytics import YOLO
 
-## Running it
-
+model = YOLO("best.pt")
+results = model.predict("path/to/image.jpg", conf=0.25)
+results[0].show()
 ```
-pip install ultralytics
-```
 
-Written for Google Colab, so if running locally just replace the `files.upload()` step with a direct path to the `dataset` folder. The `data.yaml` file inside points to the train/valid/test folders and lists the class names.
+## Credits
 
-## Notes
-
-Used YOLOv8n (the smallest/fastest variant) here mainly for speed, and it still landed a solid 0.93 mAP50 - shows the small model is more than capable for a fairly small, clean dataset like this. The pedestrian class is the clear weak spot though, more training images for that class specifically would probably help more than just adding more epochs. Worth trying `yolov8s.pt` too if squeezing out a bit more accuracy matters more than inference speed.
+- Dataset: [BCCD Dataset](https://public.roboflow.com/object-detection/bccd) by Roboflow, MIT license
+- Model: [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics)
